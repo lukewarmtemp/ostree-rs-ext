@@ -324,6 +324,26 @@ impl<'a> ManifestDiff<'a> {
         println!("Removed layers:   {n_removed:<4}  Size: {removed_size_str}");
         println!("Added layers:     {n_added:<4}  Size: {added_size_str}");
     }
+
+    /// Prints the total, removed and added content between two OCI images
+    pub fn test(&self) -> String {
+        fn layersum<'a, I: Iterator<Item = &'a oci_spec::image::Descriptor>>(layers: I) -> u64 {
+            layers.map(|layer| layer.size() as u64).sum()
+        }
+        let new_total = self.to.layers().len();
+        let new_total_size = glib::format_size(layersum(self.to.layers().iter()));
+        let n_removed = self.removed.len();
+        let n_added = self.added.len();
+        let removed_size = layersum(self.removed.iter().copied());
+        let removed_size_str = glib::format_size(removed_size);
+        let added_size = layersum(self.added.iter().copied());
+        let added_size_str = glib::format_size(added_size);
+        let result = format!("Total new layers: {new_total:<4}  Size: {new_total_size}\nRemoved layers:   {n_removed:<4}  Size: {removed_size_str}\nAdded layers:     {n_added:<4}  Size: {added_size_str}");
+        println!("Total new layers: {new_total:<4}  Size: {new_total_size}");
+        println!("Removed layers:   {n_removed:<4}  Size: {removed_size_str}");
+        println!("Added layers:     {n_added:<4}  Size: {added_size_str}");
+        return result
+    }
 }
 
 /// Apply default configuration for container image pulls to an existing configuration.
