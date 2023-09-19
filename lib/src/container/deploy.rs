@@ -37,6 +37,9 @@ pub struct DeployOpts<'a> {
     /// to a different container image, the fetch process will reuse shared layers, but
     /// it will not be necessary to remove the previous image.
     pub no_imgref: bool,
+    
+    /// If not null, switch the origin from a container image to an ostree remote.
+    pub ostree_origin: Option<String>,
 }
 
 /// Write a container image to an OSTree deployment.
@@ -75,7 +78,12 @@ pub async fn deploy(
     let commit = state.get_commit();
     let origin = glib::KeyFile::new();
     let target_imgref = options.target_imgref.unwrap_or(imgref);
-    origin.set_string("origin", ORIGIN_CONTAINER, &target_imgref.to_string());
+    let ostree_origin = options.ostree_origin.unwrap();
+    if  ostree_origin.trim().is_empty(){
+        origin.set_string("origin", ORIGIN_CONTAINER, &target_imgref.to_string());
+    } else {
+        origin.set_string("origin", "ostree-remote", &ostree_origin.to_string());
+    }
 
     if sysroot.booted_deployment().is_some() {
         let opts = ostree::SysrootDeployTreeOpts {

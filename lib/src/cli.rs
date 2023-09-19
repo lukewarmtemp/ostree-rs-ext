@@ -323,6 +323,12 @@ pub(crate) enum ContainerImageOpts {
         #[clap(long)]
         no_imgref: bool,
 
+        /// If set, switch the remote origin from an container image to an ostree remote.
+        /// This is intended for deployments that need automatic updates, which is only supported
+        /// with ostree remotes.
+        #[clap(long)]
+        ostree_origin: Option<String>,
+
         #[clap(long)]
         /// Add a kernel argument
         karg: Option<Vec<String>>,
@@ -860,6 +866,7 @@ where
                     ostree_remote,
                     target_imgref,
                     no_imgref,
+                    ostree_origin,
                     karg,
                     proxyopts,
                     write_commitid_to,
@@ -901,6 +908,7 @@ where
                         target_imgref: target_imgref.as_ref(),
                         proxy_cfg: Some(proxyopts.into()),
                         no_imgref,
+                        ostree_origin,
                         ..Default::default()
                     };
                     let state = crate::container::deploy::deploy(
