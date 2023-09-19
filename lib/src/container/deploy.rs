@@ -78,7 +78,7 @@ pub async fn deploy(
     let commit = state.get_commit();
     let origin = glib::KeyFile::new();
     let target_imgref = options.target_imgref.unwrap_or(imgref);
-    let ostree_origin = options.ostree_origin.unwrap();
+    let ostree_origin = options.ostree_origin.unwrap_or("".to_string());
     if  ostree_origin.trim().is_empty(){
         origin.set_string("origin", ORIGIN_CONTAINER, &target_imgref.to_string());
     } else {
