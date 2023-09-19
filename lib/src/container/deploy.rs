@@ -79,10 +79,10 @@ pub async fn deploy(
     let origin = glib::KeyFile::new();
     let target_imgref = options.target_imgref.unwrap_or(imgref);
     let ostree_origin = options.ostree_origin.unwrap_or("".to_string());
-    if  ostree_origin.trim().is_empty(){
+    if ostree_origin.trim().is_empty(){
         origin.set_string("origin", ORIGIN_CONTAINER, &target_imgref.to_string());
     } else {
-        origin.set_string("origin", "ostree-remote", &ostree_origin.to_string());
+        origin.set_string("origin", "baserefspec", &ostree_origin.to_string());
     }
 
     if sysroot.booted_deployment().is_some() {
