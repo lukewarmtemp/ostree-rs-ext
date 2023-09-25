@@ -88,7 +88,7 @@ systemd-run -dP --wait podman build -t localhost/fcos-derived .
 derived_img=oci:/var/tmp/derived.oci
 derived_img_dir=dir:/var/tmp/derived.dir
 systemd-run -dP --wait skopeo copy containers-storage:localhost/fcos-derived "${derived_img}"
-systemd-run -dP --wait skopeo copy containers-storage:localhost/fcos-derived "${derived_img_dir}"
+systemd-run -dP --wait skopeo copy "${derived_img}" "${derived_img_dir}"
 
 # Prune to reset state
 ostree refs ostree/container/image --delete
@@ -110,16 +110,8 @@ echo "ok deploy derived container identical revs"
 
 ostree-ext-cli container image deploy --sysroot "${sysroot}" \
         --stateroot "${stateroot}" --imgref ostree-unverified-image:"${derived_img_dir}"
-imgref=$(ostree refs --repo=${repo} ostree/container/image | head -1)
-img_commit=$(ostree --repo=${repo} rev-parse ostree/container/image/${imgref})
-ostree-ext-cli container image remove --repo "${repo}" "${derived_img_dir}"
-
-ostree-ext-cli container image deploy --sysroot "${sysroot}" \
-        --stateroot "${stateroot}" --imgref ostree-unverified-image:"${derived_img_dir}"
-img_commit2=$(ostree --repo=${repo} rev-parse ostree/container/image/${imgref})
-test "${img_commit}" = "${img_commit2}"
-echo "ok deploy derived container identical revs"
-ostree-ext-cli container image remove --repo "${repo}" "${derived_img_dir}"
+echo "ok deploy derived container from local dir"
+rm -rf /var/tmp/derived.dir
 
 # Verify policy
 
