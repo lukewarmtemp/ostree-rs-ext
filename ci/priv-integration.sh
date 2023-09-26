@@ -111,6 +111,7 @@ echo "ok deploy derived container identical revs"
 ostree-ext-cli container image deploy --sysroot "${sysroot}" \
         --stateroot "${stateroot}" --imgref ostree-unverified-image:"${derived_img_dir}"
 echo "ok deploy derived container from local dir"
+ostree-ext-cli container image remove --repo "${repo}" "${derived_img_dir}"
 rm -rf /var/tmp/derived.dir
 
 # Verify policy
