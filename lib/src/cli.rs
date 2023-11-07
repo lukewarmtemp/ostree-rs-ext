@@ -17,7 +17,7 @@ use ostree::{gio, glib};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use tokio::sync::mpsc::Receiver;
@@ -241,6 +241,21 @@ pub(crate) enum ContainerImageOpts {
         imgref: ImageReference,
     },
 
+    /// Output manifest or configuration for an already stored container image.
+    Metadata {
+        /// Path to the repository
+        #[clap(long, value_parser)]
+        repo: Utf8PathBuf,
+
+        /// Container image reference, e.g. registry:quay.io/exampleos/exampleos:latest
+        #[clap(value_parser = parse_base_imgref)]
+        imgref: ImageReference,
+
+        /// Output the config, not the manifest
+        #[clap(long)]
+        config: bool,
+    },
+
     /// Copy a pulled container image from one repo to another.
     Copy {
         /// Path to the source repository
@@ -320,6 +335,7 @@ pub(crate) enum ContainerImageOpts {
 
         /// Source image reference, e.g. ostree-remote-image:someremote:registry:quay.io/exampleos/exampleos@sha256:abcd...
         /// This conflicts with `--image`.
+        /// This conflicts with `--image`. Supports `registry:`, `docker://`, `oci:`, `oci-archive:`, `containers-storage:`, and `dir:`
         #[clap(long, required_unless_present = "image")]
         imgref: Option<String>,
 
@@ -723,16 +739,17 @@ async fn container_store(
     Ok(())
 }
 
-fn print_column(s: &str, clen: usize, remaining: &mut usize) {
-    let l = s.len().min(*remaining);
-    print!("{}", &s[0..l]);
+fn print_column(s: &str, clen: u16, remaining: &mut terminal_size::Width) {
+    let l: u16 = s.len().try_into().unwrap();
+    let l = l.min(remaining.0);
+    print!("{}", &s[0..l as usize]);
     if clen > 0 {
         // We always want two trailing spaces
         let pad = clen.saturating_sub(l) + 2;
         for _ in 0..pad {
             print!(" ");
         }
-        *remaining = remaining.checked_sub(l + pad).unwrap();
+        remaining.0 = remaining.0.checked_sub(l + pad).unwrap();
     }
 }
 
@@ -740,8 +757,10 @@ fn print_column(s: &str, clen: usize, remaining: &mut usize) {
 async fn container_history(repo: &ostree::Repo, imgref: &ImageReference) -> Result<()> {
     let img = crate::container::store::query_image_ref(repo, imgref)?
         .ok_or_else(|| anyhow::anyhow!("No such image: {}", imgref))?;
-    let columns = [("ID", 20), ("SIZE", 10), ("CREATED BY", 0usize)];
-    let width = term_size::dimensions().map(|x| x.0).unwrap_or(80);
+    let columns = [("ID", 20u16), ("SIZE", 10), ("CREATED BY", 0)];
+    let width = terminal_size::terminal_size()
+        .map(|x| x.0)
+        .unwrap_or(terminal_size::Width(80));
     if let Some(config) = img.configuration.as_ref() {
         {
             let mut remaining = width;
@@ -765,7 +784,7 @@ async fn container_history(repo: &ostree::Repo, imgref: &ImageReference) -> Resu
             // Verify it's OK to slice, this should all be ASCII
             assert!(digest.chars().all(|c| c.is_ascii()));
             let digest_max = columns[0].1;
-            let digest = &digest[0..digest_max];
+            let digest = &digest[0..digest_max as usize];
             print_column(digest, digest_max, &mut remaining);
             let size = glib::format_size(layer.size() as u64);
             print_column(size.as_str(), columns[1].1, &mut remaining);
@@ -924,6 +943,27 @@ async fn run_from_opt(opt: Opt) -> Result<()> {
                 ContainerImageOpts::History { repo, imgref } => {
                     let repo = parse_repo(&repo)?;
                     container_history(&repo, &imgref).await
+                }
+                ContainerImageOpts::Metadata {
+                    repo,
+                    imgref,
+                    config,
+                } => {
+                    let repo = parse_repo(&repo)?;
+                    let image = crate::container::store::query_image_ref(&repo, &imgref)?
+                        .ok_or_else(|| anyhow::anyhow!("No such image"))?;
+                    let stdout = std::io::stdout().lock();
+                    let mut stdout = std::io::BufWriter::new(stdout);
+                    if config {
+                        let config = image
+                            .configuration
+                            .ok_or_else(|| anyhow::anyhow!("Missing configuration"))?;
+                        serde_json::to_writer(&mut stdout, &config)?;
+                    } else {
+                        serde_json::to_writer(&mut stdout, &image.manifest)?;
+                    }
+                    stdout.flush()?;
+                    Ok(())
                 }
                 ContainerImageOpts::Remove {
                     repo,

@@ -42,6 +42,9 @@ pub struct DeployOpts<'a> {
     /// to a different container image, the fetch process will reuse shared layers, but
     /// it will not be necessary to remove the previous image.
     pub no_imgref: bool,
+
+    /// Do not cleanup deployments
+    pub no_clean: bool,
 }
 
 /// Write a container image to an OSTree deployment.
@@ -78,7 +81,7 @@ pub async fn deploy(
             imp.import(prep).await?
         }
     };
-    let commit = state.get_commit();
+    let commit = state.merge_commit.as_str();
     let origin = glib::KeyFile::new();
     let target_imgref = options.target_imgref.unwrap_or(imgref);
     origin.set_string("origin", ORIGIN_CONTAINER, &target_imgref.to_string());
@@ -106,7 +109,11 @@ pub async fn deploy(
             Some(&opts),
             cancellable,
         )?;
-        let flags = ostree::SysrootSimpleWriteDeploymentFlags::NONE;
+        let flags = if options.no_clean {
+            ostree::SysrootSimpleWriteDeploymentFlags::NO_CLEAN
+        } else {
+            ostree::SysrootSimpleWriteDeploymentFlags::NONE
+        };
         sysroot.simple_write_deployment(
             Some(stateroot),
             deployment,
@@ -114,7 +121,9 @@ pub async fn deploy(
             flags,
             cancellable,
         )?;
-        sysroot.cleanup(cancellable)?;
+        if !options.no_clean {
+            sysroot.cleanup(cancellable)?;
+        }
     }
 
     Ok(state)

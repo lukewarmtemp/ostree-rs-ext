@@ -33,6 +33,8 @@ ostree-ext-cli container image prune-images --sysroot "${sysroot}"
 ostree-ext-cli container image deploy --sysroot "${sysroot}" \
     --stateroot "${stateroot}" --imgref "${imgref}"
 ostree admin --sysroot="${sysroot}" status
+ostree-ext-cli container image metadata --repo "${sysroot}/ostree/repo" registry:"${image}" > manifest.json
+jq '.schemaVersion' < manifest.json
 ostree-ext-cli container image remove --repo "${sysroot}/ostree/repo" registry:"${image}"
 ostree admin --sysroot="${sysroot}" undeploy 0
 # Now test the new syntax which has a nicer --image that defaults to registry.
@@ -86,7 +88,9 @@ RUN touch /usr/share/somefile
 EOF
 systemd-run -dP --wait podman build -t localhost/fcos-derived .
 derived_img=oci:/var/tmp/derived.oci
+derived_img_dir=dir:/var/tmp/derived.dir
 systemd-run -dP --wait skopeo copy containers-storage:localhost/fcos-derived "${derived_img}"
+systemd-run -dP --wait skopeo copy "${derived_img}" "${derived_img_dir}"
 
 # Prune to reset state
 ostree refs ostree/container/image --delete
@@ -105,6 +109,12 @@ ostree-ext-cli container image deploy --sysroot "${sysroot}" \
 img_commit2=$(ostree --repo=${repo} rev-parse ostree/container/image/${imgref})
 test "${img_commit}" = "${img_commit2}"
 echo "ok deploy derived container identical revs"
+
+ostree-ext-cli container image deploy --sysroot "${sysroot}" \
+        --stateroot "${stateroot}" --imgref ostree-unverified-image:"${derived_img_dir}"
+echo "ok deploy derived container from local dir"
+ostree-ext-cli container image remove --repo "${repo}" "${derived_img_dir}"
+rm -rf /var/tmp/derived.dir
 
 # Verify policy
 
